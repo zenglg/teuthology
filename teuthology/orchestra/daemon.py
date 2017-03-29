@@ -4,6 +4,7 @@ import struct
 from cStringIO import StringIO
 from . import run
 from .. import misc
+from teuthology.exceptions import CommandFailedError
 
 log = logging.getLogger(__name__)
 
@@ -99,9 +100,12 @@ class DaemonState(object):
         else:
             self.proc.stdin.close()
             self.log.debug('waiting for process to exit')
-            run.wait([self.proc], timeout=timeout)
+            try:
+               run.wait([self.proc], timeout=timeout)
+            except CommandFailedError:
+               log.exception("Error while waiting for process to exit")
             self.proc = None
-        self.log.info('Stopped')
+            self.log.info('Stopped')
 
     def start(self, timeout=300):
         """
