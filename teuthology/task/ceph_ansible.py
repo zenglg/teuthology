@@ -3,15 +3,18 @@ import os
 import re
 import logging
 import yaml
+import time
 
 from cStringIO import StringIO
 
 from . import Task
 from tempfile import NamedTemporaryFile
 from ..config import config as teuth_config
-from ..misc import get_scratch_devices
+from ..misc import get_scratch_devices,  reconnect
 from teuthology import contextutil
 from teuthology.orchestra import run
+from teuthology.nuke import remove_osd_mounts, remove_ceph_packages
+
 from teuthology import misc
 log = logging.getLogger(__name__)
 
@@ -51,6 +54,33 @@ class CephAnsible(Task):
             roles=['ceph-restapi'],
         ),
     ]
+    _default_rh_playbook = [
+        dict(
+            hosts='mons',
+            become=True,
+            roles=['ceph-mon'],
+        ),
+        dict(
+            hosts='osds',
+            become=True,
+            roles=['ceph-osd'],
+        ),
+        dict(
+            hosts='mdss',
+            become=True,
+            roles=['ceph-mds'],
+        ),
+        dict(
+            hosts='rgws',
+            become=True,
+            roles=['ceph-rgw'],
+        ),
+        dict(
+            hosts='client',
+            become=True,
+            roles=['ceph-common'],
+        ),
+    ]
 
     __doc__ = """
     A task to setup ceph cluster using ceph-ansible
@@ -59,6 +89,9 @@ class CephAnsible(Task):
         repo: {git_base}ceph-ansible.git
         branch: mybranch # defaults to master
         ansible-version: 2.2 # defaults to 2.2.1
+        # for old ansible version where clients roles
+        # doesn't exist, use setup-clients options
+        setup-clients: true
         vars:
           ceph_dev: True ( default)
           ceph_conf_overrides:
@@ -85,9 +118,16 @@ class CephAnsible(Task):
             self.playbook = self._default_playbook
         else:
             self.playbook = self.config['playbook']
+        if 'setup-clients' in config:
+            # use playbook that doesn't support ceph-client roles
+            self.playbook = self._default_rh_playbook
         if 'repo' not in config:
             self.config['repo'] = os.path.join(teuth_config.ceph_git_base_url,
                                                'ceph-ansible.git')
+
+        # for downstream bulids skip var setup
+        if 'rhbuild' in config:
+            return
         # default vars to dev builds
         if 'vars' not in config:
             vars = dict()
@@ -153,15 +193,16 @@ class CephAnsible(Task):
             mons='mon',
             mdss='mds',
             osds='osd',
+            rgws='rgw',
             clients='client',
         )
         hosts_dict = dict()
         for group in sorted(groups_to_roles.keys()):
             role_prefix = groups_to_roles[group]
             want = lambda role: role.startswith(role_prefix)
-            for (remote, roles) in self.cluster.only(want).remotes.iteritems():
-                hostname = remote.hostname
-                host_vars = self.get_host_vars(remote)
+            for (remot, roles) in self.cluster.only(want).remotes.iteritems():
+                hostname = remot.hostname
+                host_vars = self.get_host_vars(remot)
                 if group not in hosts_dict:
                     hosts_dict[group] = {hostname: host_vars}
                 elif hostname not in hosts_dict[group]:
@@ -210,6 +251,56 @@ class CephAnsible(Task):
         os.remove(self.inventory)
         os.remove(self.playbook_file)
         os.remove(self.extra_vars_file)
+        machine_type = self.ctx.config.get('machine_type')
+        if not machine_type == 'vps':
+            self.ctx.cluster.run(args=['sudo', 'systemctl', 'stop',
+                                       'ceph.target'],
+                                 check_status=False)
+            time.sleep(4)
+            self.ctx.cluster.run(args=['sudo', 'stop', 'ceph-all'],
+                                 check_status=False)
+            installer_node = self.ceph_installer
+            installer_node.run(args=['rm', '-rf', 'ceph-ansible'])
+            remove_osd_mounts(self.ctx)
+            remove_ceph_packages(self.ctx)
+            if self.config.get('rhbuild'):
+                if installer_node.os.package_type == 'rpm':
+                    installer_node.run(args=[
+                        'sudo',
+                        'yum',
+                        'remove',
+                        '-y',
+                        'ceph-ansible'
+                    ])
+                else:
+                    installer_node.run(args=[
+                        'sudo',
+                        'apt-get',
+                        'remove',
+                        '-y',
+                        'ceph-ansible'
+                    ])
+            self.ctx.cluster.run(args=['sudo', 'reboot'], wait=False)
+            time.sleep(30)
+            log.info("Waiting for reconnect after reboot")
+            reconnect(self.ctx, 480)
+            self.ctx.cluster.run(args=['sudo', 'rm', '-rf', '/var/lib/ceph'],
+                                 check_status=False)
+            # remove old systemd files, known issue
+            self.ctx.cluster.run(
+                args=[
+                    'sudo',
+                    'rm',
+                    '-rf',
+                    run.Raw('/etc/systemd/system/ceph*')],
+                check_status=False)
+            self.ctx.cluster.run(
+                args=[
+                    'sudo',
+                    'rm',
+                    '-rf',
+                    run.Raw('/etc/systemd/system/multi-user.target.wants/ceph*')],
+                check_status=False)
 
     def wait_for_ceph_health(self):
         with contextutil.safe_while(sleep=15, tries=6,
@@ -242,8 +333,25 @@ class CephAnsible(Task):
         return host_vars
 
     def run_rh_playbook(self):
-        ceph_installer = self.ceph_installer
         args = self.args
+        try:
+            (ceph_installer,) = self.ctx.cluster.only('installer.0').remotes
+        except ValueError:
+            log.info("using first monitor as installer node")
+            (ceph_installer,) = self.ctx.cluster.only('mon.a').remotes
+        from tasks.set_repo import GA_BUILDS, set_cdn_repo
+        rhbuild = self.config.get('rhbuild')
+        if rhbuild in GA_BUILDS:
+            set_cdn_repo(self.ctx, self.config)
+        # install ceph-ansible
+        if ceph_installer.os.package_type == 'rpm':
+            ceph_installer.run(args=[
+                'sudo',
+                'yum',
+                'install',
+                '-y',
+                'ceph-ansible'])
+            time.sleep(4)
         ceph_installer.run(args=[
             'cp',
             '-R',
@@ -271,10 +379,15 @@ class CephAnsible(Task):
             check_status=False,
             stdout=out
         )
-        log.info(out.getvalue())
+        # log.info(out.getvalue())
         if re.search(r'all hosts have already failed', out.getvalue()):
             log.error("Failed during ceph-ansible execution")
             raise CephAnsibleError("Failed during ceph-ansible execution")
+        # old ansible doesn't have clients role, setup clients for those
+        # cases
+        if self.config.get('setup-clients'):
+            self.setup_client_node()
+        self.wait_for_ceph_health()
 
     def run_playbook(self):
         # setup ansible on first mon node
@@ -351,7 +464,7 @@ class CephAnsible(Task):
             run.Raw(';'),
             'pip',
             'install',
-            run.Raw('setuptools>=11.3'),
+            'setuptools>=11.3',
             run.Raw(ansible_ver),
             run.Raw(';'),
             run.Raw(str_args)
@@ -362,6 +475,45 @@ class CephAnsible(Task):
         # for the teuthology workunits to work we
         # need to fix the permission on keyring to be readable by them
         self.fix_keyring_permission()
+
+    def setup_client_node(self):
+        ceph_conf_contents = StringIO()
+        ceph_admin_keyring = StringIO()
+        self.ctx.cluster.only('mon.a').run(args=['sudo', 'cat',
+                                                 '/etc/ceph/ceph.conf'],
+                                           stdout=ceph_conf_contents)
+        self.ctx.cluster.only('mon.a').run(args=['sudo', 'ceph', 'auth',
+                                                 'get', 'client.admin'],
+                                           stdout=ceph_admin_keyring)
+        for remot, roles in self.ctx.cluster.remotes.iteritems():
+            for role in roles:
+                if role.startswith('client'):
+                    if remot.os.package_type == 'rpm':
+                        remot.run(args=[
+                            'sudo',
+                            'yum',
+                            'install',
+                            '-y',
+                            'ceph-common',
+                            'ceph-test'
+                        ])
+                    else:
+                        remot.run(args=[
+                            'sudo',
+                            'apt-get',
+                            '-y',
+                            'install',
+                            'ceph-common',
+                            'ceph-test'
+                        ])
+                    misc.sudo_write_file(
+                        remot,
+                        '/etc/ceph/ceph.conf',
+                        ceph_conf_contents.getvalue())
+                    misc.sudo_write_file(
+                        remot,
+                        '/etc/ceph/ceph.client.admin.keyring',
+                        ceph_admin_keyring.getvalue())
 
     def fix_keyring_permission(self):
         clients_only = lambda role: role.startswith('client')
