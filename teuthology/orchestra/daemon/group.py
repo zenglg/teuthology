@@ -1,5 +1,5 @@
 from teuthology import misc
-from teuthology.orchestra.daemon import DaemonState
+from teuthology.orchestra.daemon.state import DaemonState
 
 
 class DaemonGroup(object):
