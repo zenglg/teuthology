@@ -4,7 +4,7 @@ from cStringIO import StringIO
 
 from teuthology.exceptions import CommandFailedError
 from teuthology.orchestra import run
-from teuthology.orchestra.daemon import DaemonState
+from teuthology.orchestra.daemon.state import DaemonState
 
 log = logging.getLogger(__name__)
 
