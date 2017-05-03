@@ -34,7 +34,7 @@ class SystemDState(DaemonState):
     def _get_systemd_cmd(self, action):
         cmd = systemd_cmd_templ.format(
             action=action,
-            daemon=self.daemon_type,
+            daemon='ceph-%s' % self.daemon_type,
             id_=self.daemon_id,
         )
         return cmd
