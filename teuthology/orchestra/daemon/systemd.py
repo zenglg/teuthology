@@ -40,11 +40,11 @@ class SystemDState(DaemonState):
         return cmd
 
     def _set_commands(self):
-        self.start_cmd = self.get_systemd_cmd('start')
-        self.stop_cmd = self.get_systemd_cmd('stop')
-        self.restart_cmd = self.get_systemd_cmd('restart')
-        self.show_cmd = self.get_systemd_cmd('show')
-        self.status_cmd = self.get_systemd_cmd('status')
+        self.start_cmd = self._get_systemd_cmd('start')
+        self.stop_cmd = self._get_systemd_cmd('stop')
+        self.restart_cmd = self._get_systemd_cmd('restart')
+        self.show_cmd = self._get_systemd_cmd('show')
+        self.status_cmd = self._get_systemd_cmd('status')
         self.output_cmd = 'sudo journalctl -u ' \
             '{role}@{id_} -t {role} -n 10'.format(
                 role=self.role.replace('.', '-'), id_=self.daemon_id,
