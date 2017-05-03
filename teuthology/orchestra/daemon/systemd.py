@@ -11,36 +11,43 @@ log = logging.getLogger(__name__)
 systemd_cmd_templ = 'sudo systemctl {action} {daemon}@{id_}'
 
 
-def get_systemd_cmd(action, daemon, id_):
-    if daemon == 'rgw':
-        daemon = 'radosgw'
-        id_ = 'rgw.%s' % id_
-    daemon = 'ceph-%s' % daemon
-    cmd = systemd_cmd_templ.format(
-        action=action,
-        daemon=daemon,
-        id_=id_,
-    )
-    return cmd
-
-
 class SystemDState(DaemonState):
     def __init__(self, remote, role, id_, *command_args,
                  **command_kwargs):
         super(SystemDState, self).__init__(
-                remote, role, id_, *command_args, **command_kwargs)
-        self.log = command_kwargs.get('logger', log)
+            remote, role, id_, *command_args, **command_kwargs)
         self._set_commands()
+        self.log = command_kwargs.get('logger', log)
+
+    @property
+    def daemon_type(self):
+        if self.type_ == 'rgw':
+            return 'radosgw'
+        return self.type_
+
+    @property
+    def daemon_id(self):
+        if self.type_ == 'rgw':
+            return 'rgw.%s' % self.id_
+        return self.id_
+
+    def _get_systemd_cmd(self, action):
+        cmd = systemd_cmd_templ.format(
+            action=action,
+            daemon=self.daemon_type,
+            id_=self.daemon_id,
+        )
+        return cmd
 
     def _set_commands(self):
-        self.start_cmd = get_systemd_cmd('start', self.type_, self.id_)
-        self.stop_cmd = get_systemd_cmd('stop', self.type_, self.id_)
-        self.restart_cmd = get_systemd_cmd('restart', self.type_, self.id_)
-        self.show_cmd = get_systemd_cmd('show', self.type_, self.id_)
-        self.status_cmd = get_systemd_cmd('status', self.type_, self.id_)
+        self.start_cmd = self.get_systemd_cmd('start')
+        self.stop_cmd = self.get_systemd_cmd('stop')
+        self.restart_cmd = self.get_systemd_cmd('restart')
+        self.show_cmd = self.get_systemd_cmd('show')
+        self.status_cmd = self.get_systemd_cmd('status')
         self.output_cmd = 'sudo journalctl -u ' \
             '{role}@{id_} -t {role} -n 10'.format(
-                role=self.role.replace('.', '-'), id_=self.id_,
+                role=self.role.replace('.', '-'), id_=self.daemon_id,
             )
 
     def check_status(self):
