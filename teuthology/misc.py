@@ -1038,6 +1038,7 @@ def get_first_mon(ctx, config, cluster='ceph'):
     """
     return the "first" mon role (alphanumerically, for lack of anything better)
     """
+    log.info("getting first mon for cluster " + cluster)
     mons = get_mon_names(ctx, cluster)
     if mons:
         return sorted(mons)[0]
