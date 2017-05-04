@@ -29,7 +29,7 @@ class SystemDState(DaemonState):
         cmd = systemd_cmd_templ.format(
             action=action,
             daemon='%s-%s' % (self.cluster, self.daemon_type),
-            id_=self.id_,
+            id_=self.id_.replace('client.', ''),
         )
         return cmd
 
