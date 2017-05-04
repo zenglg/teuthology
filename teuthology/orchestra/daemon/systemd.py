@@ -39,9 +39,16 @@ class SystemDState(DaemonState):
         self.restart_cmd = self._get_systemd_cmd('restart')
         self.show_cmd = self._get_systemd_cmd('show')
         self.status_cmd = self._get_systemd_cmd('status')
+        cluster_and_type = '%s-%s' % (self.cluster, self.daemon_type)
+        if self.type_ == self.daemon_type:
+            syslog_id = cluster_and_type
+        else:
+            syslog_id = self.daemon_type
         self.output_cmd = 'sudo journalctl -u ' \
-            '{role}@{id_} -t {role} -n 10'.format(
-                role='%s-%s' % (self.cluster, self.daemon_type), id_=self.id_,
+            '{0}@{1} -t {2} -n 10'.format(
+                cluster_and_type,
+                self.id_,
+                syslog_id,
             )
 
     def check_status(self):
