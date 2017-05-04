@@ -47,7 +47,7 @@ class SystemDState(DaemonState):
         self.output_cmd = 'sudo journalctl -u ' \
             '{0}@{1} -t {2} -n 10'.format(
                 cluster_and_type,
-                self.id_,
+                self.id_.replace('client.', ''),
                 syslog_id,
             )
 
