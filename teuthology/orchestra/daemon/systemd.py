@@ -28,7 +28,7 @@ class SystemDState(DaemonState):
     def _get_systemd_cmd(self, action):
         cmd = systemd_cmd_templ.format(
             action=action,
-            daemon='ceph-%s' % self.daemon_type,
+            daemon='%s-%s' % (self.cluster, self.daemon_type),
             id_=self.id_,
         )
         return cmd
@@ -41,7 +41,7 @@ class SystemDState(DaemonState):
         self.status_cmd = self._get_systemd_cmd('status')
         self.output_cmd = 'sudo journalctl -u ' \
             '{role}@{id_} -t {role} -n 10'.format(
-                role=self.role.replace('.', '-'), id_=self.id_,
+                role='%s-%s' % (self.cluster, self.daemon_type), id_=self.id_,
             )
 
     def check_status(self):
