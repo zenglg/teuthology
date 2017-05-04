@@ -25,17 +25,11 @@ class SystemDState(DaemonState):
             return 'radosgw'
         return self.type_
 
-    @property
-    def daemon_id(self):
-        if self.type_ == 'rgw':
-            return 'rgw.%s' % self.id_
-        return self.id_
-
     def _get_systemd_cmd(self, action):
         cmd = systemd_cmd_templ.format(
             action=action,
             daemon='ceph-%s' % self.daemon_type,
-            id_=self.daemon_id,
+            id_=self.id_,
         )
         return cmd
 
@@ -47,7 +41,7 @@ class SystemDState(DaemonState):
         self.status_cmd = self._get_systemd_cmd('status')
         self.output_cmd = 'sudo journalctl -u ' \
             '{role}@{id_} -t {role} -n 10'.format(
-                role=self.role.replace('.', '-'), id_=self.daemon_id,
+                role=self.role.replace('.', '-'), id_=self.id_,
             )
 
     def check_status(self):
