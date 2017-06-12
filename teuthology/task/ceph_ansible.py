@@ -376,7 +376,6 @@ class CephAnsible(Task):
                 run.Raw(str_args)
             ],
             timeout=4200,
-            check_status=False,
             stdout=out
         )
         # log.info(out.getvalue())
