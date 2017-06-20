@@ -21,6 +21,11 @@ class CephAnsible(Task):
 
     _default_playbook = [
         dict(
+            hosts='all',
+            become=True,
+            tasks=[],
+        ),
+        dict(
             hosts='mons',
             become=True,
             roles=['ceph-mon'],
