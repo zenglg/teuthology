@@ -252,56 +252,34 @@ class CephAnsible(Task):
         os.remove(self.inventory)
         os.remove(self.playbook_file)
         os.remove(self.extra_vars_file)
-        machine_type = self.ctx.config.get('machine_type')
-        if not machine_type == 'vps':
-            self.ctx.cluster.run(args=['sudo', 'systemctl', 'stop',
-                                       'ceph.target'],
-                                 check_status=False)
-            time.sleep(4)
-            self.ctx.cluster.run(args=['sudo', 'stop', 'ceph-all'],
-                                 check_status=False)
-            installer_node = self.ceph_installer
-            installer_node.run(args=['rm', '-rf', 'ceph-ansible'])
-            remove_osd_mounts(self.ctx)
-            remove_ceph_packages(self.ctx)
-            if self.config.get('rhbuild'):
-                if installer_node.os.package_type == 'rpm':
-                    installer_node.run(args=[
-                        'sudo',
-                        'yum',
-                        'remove',
-                        '-y',
-                        'ceph-ansible'
-                    ])
-                else:
-                    installer_node.run(args=[
-                        'sudo',
-                        'apt-get',
-                        'remove',
-                        '-y',
-                        'ceph-ansible'
-                    ])
-            self.ctx.cluster.run(args=['sudo', 'reboot'], wait=False)
-            time.sleep(30)
-            log.info("Waiting for reconnect after reboot")
-            reconnect(self.ctx, 480)
-            self.ctx.cluster.run(args=['sudo', 'rm', '-rf', '/var/lib/ceph'],
-                                 check_status=False)
-            # remove old systemd files, known issue
-            self.ctx.cluster.run(
+        # run purge-cluster that teardowns the cluster
+        args = [
+            'ANSIBLE_STDOUT_CALLBACK=debug',
+            'ansible-playbook', '-vv',
+            '-e', 'ireallymeanit=yes',
+            '-i', 'inven.yml', 'infrastructure-playbooks/purge-cluster.yml'
+        ]
+        log.debug("Running %s", args)
+        str_args = ' '.join(args)
+        installer_node = self.ceph_installer
+        if self.config.get('rhbuild'):
+            installer_node.run(
                 args=[
-                    'sudo',
-                    'rm',
-                    '-rf',
-                    run.Raw('/etc/systemd/system/ceph*')],
-                check_status=False)
-            self.ctx.cluster.run(
+                    run.Raw('cd ~/ceph-ansible'),
+                    run.Raw(';'),
+                    run.Raw(str_args)
+                ]
+            )
+        else:
+            installer_node.run(
                 args=[
-                    'sudo',
-                    'rm',
-                    '-rf',
-                    run.Raw('/etc/systemd/system/multi-user.target.wants/ceph*')],
-                check_status=False)
+                    run.Raw('cd ~/ceph-ansible'),
+                    run.Raw(';'),
+                    run.Raw('source venv/bin/activate'),
+                    run.Raw(';'),
+                    run.Raw(str_args)
+                ]
+            )
 
     def wait_for_ceph_health(self):
         with contextutil.safe_while(sleep=15, tries=6,
