@@ -252,6 +252,8 @@ class CephAnsible(Task):
         os.remove(self.inventory)
         os.remove(self.playbook_file)
         os.remove(self.extra_vars_file)
+        # collect logs
+        self.collect_logs()
         # run purge-cluster that teardowns the cluster
         args = [
             'ANSIBLE_STDOUT_CALLBACK=debug',
@@ -280,6 +282,43 @@ class CephAnsible(Task):
                     run.Raw(str_args)
                 ]
             )
+
+    def collect_logs(self):
+        ctx = self.ctx
+        if ctx.archive is not None and \
+                not (ctx.config.get('archive-on-error') and ctx.summary['success']):
+            # collect logs
+            log.info('Compressing logs...')
+            run.wait(
+                ctx.cluster.run(
+                    args=[
+                        'sudo',
+                        'find',
+                        '/var/log/ceph',
+                        '-name',
+                        '*.log',
+                        '-print0',
+                        run.Raw('|'),
+                        'sudo',
+                        'xargs',
+                        '-0',
+                        '--no-run-if-empty',
+                        '--',
+                        'gzip',
+                        '--',
+                    ],
+                    check_status=False,
+                ),
+            )
+
+            log.info('Archiving logs...')
+            path = os.path.join(ctx.archive, 'remote')
+            os.makedirs(path)
+            for remote in ctx.cluster.remotes.iterkeys():
+                sub = os.path.join(path, remote.shortname)
+                os.makedirs(sub)
+                misc.pull_directory(remote, '/var/log/ceph',
+                                    os.path.join(sub, 'log'))
 
     def wait_for_ceph_health(self):
         with contextutil.safe_while(sleep=15, tries=6,
