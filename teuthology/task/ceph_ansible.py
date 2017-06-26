@@ -10,10 +10,9 @@ from cStringIO import StringIO
 from . import Task
 from tempfile import NamedTemporaryFile
 from ..config import config as teuth_config
-from ..misc import get_scratch_devices,  reconnect
+from ..misc import get_scratch_devices
 from teuthology import contextutil
 from teuthology.orchestra import run
-from teuthology.nuke import remove_osd_mounts, remove_ceph_packages
 
 from teuthology import misc
 log = logging.getLogger(__name__)
