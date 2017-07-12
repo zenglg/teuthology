@@ -221,7 +221,7 @@ def get_initial_tasks(lock, config, machine_type):
         init_tasks.extend([
             {'pcp': None},
             {'selinux': None},
-            {'ansible.cephlab': None},
+            {'internal.pre_cleanup': None},
             {'clock': None}
         ])
 
