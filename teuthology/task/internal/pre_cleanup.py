@@ -26,3 +26,4 @@ def pre_cleanup(ctx, config):
             'sudo', 'rm', '-rf', run.Raw('~/*')
             ],
     )
+    yield
