@@ -26,4 +26,10 @@ def pre_cleanup(ctx, config):
             'sudo', 'rm', '-rf', run.Raw('~/*')
             ],
     )
+    # create cephtest directory
+    ctx.cluster.run(
+            args=[
+                'mkdir', 'cephtest'
+                ],
+        )
     yield
