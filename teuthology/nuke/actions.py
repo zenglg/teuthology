@@ -338,6 +338,7 @@ def remove_ceph_data(ctx):
         args=[
             'sudo', 'rm', '-rf', '/etc/ceph',
             run.Raw('/var/run/ceph*'),
+            run.Raw('/etc/systemd/system/ceph*'),
         ],
     )
     install_task.purge_data(ctx)
