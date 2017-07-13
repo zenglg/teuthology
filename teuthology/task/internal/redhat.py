@@ -83,8 +83,12 @@ def _setup_latest_repo(ctx, config):
     with parallel():
         for remote in ctx.cluster.remotes.iterkeys():
             if remote.os.package_type == 'rpm':
-                remote.run(args=['sudo', 'subscription-manager', 'repos',
-                                 run.Raw('--disable=*ceph*')])
+                # skip is required for beta iso testing
+                if config.get('skip-subscription-manager', False) is True:
+                    log.info("Skipping subscription-manager command")
+                else:
+                    remote.run(args=['sudo', 'subscription-manager', 'repos',
+                                    run.Raw('--disable=*ceph*')])
                 base_url = config.get('base-repo-url', '')
                 installer_url = config.get('installer-repo-url', '')
                 repos = ['MON', 'OSD', 'Tools', 'Calamari', 'Installer']
