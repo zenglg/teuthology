@@ -224,6 +224,10 @@ def get_initial_tasks(lock, config, machine_type):
             {'selinux': None},
             {'clock': None}
         ])
+    if 'run-cm-ansible' in config:
+        init_tasks.extend([
+             {'ansible.cephlab': None},
+        ])
 
     if 'redhat' in config:
         init_tasks.extend([
@@ -232,7 +236,6 @@ def get_initial_tasks(lock, config, machine_type):
             {'internal.setup_additional_repo': None},
             {'kernel.install_latest_rh_kernel': None}
         ])
-
 
     return init_tasks
 

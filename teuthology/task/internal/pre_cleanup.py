@@ -16,14 +16,18 @@ def pre_cleanup(ctx, config):
     ceph and its related dependent packages
     """
 
-    log.info("Remove any previously installed packages")
-    remove_installed_packages(ctx)
-    remove_ceph_packages(ctx)
-    remove_ceph_data(ctx)
-    # remove anything/everything in home dir
-    ctx.cluster.run(
-        args=[
-            'sudo', 'rm', '-rf', run.Raw('~/*')
-            ],
-    )
-    yield
+    if ctx.config.get('run-cm-ansible'):
+        log.info("Ceph-cm-ansible task is configured to run, skipping..")
+        yield
+    else:
+        log.info("Remove any previously installed packages")
+        remove_installed_packages(ctx)
+        remove_ceph_packages(ctx)
+        remove_ceph_data(ctx)
+        # remove anything/everything in home dir
+        ctx.cluster.run(
+            args=[
+                'sudo', 'rm', '-rf', run.Raw('~/*')
+                ],
+        )
+        yield
