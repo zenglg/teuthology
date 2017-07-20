@@ -105,6 +105,7 @@ def _setup_latest_repo(ctx, config):
                     remote.put_file(base_repo_file.name, base_repo_file.name)
                     remote.run(args=['sudo', 'cp', base_repo_file.name,
                                      '/etc/yum.repos.d/rh_ceph.repo'])
+                    remote.run(args=['sudo', 'yum', 'clean', 'metadata'])
                 if installer_url.startswith('http'):
                     irepo_to_use = _get_repos_to_use(
                         installer_url, installer_repos)
@@ -113,6 +114,7 @@ def _setup_latest_repo(ctx, config):
                     remote.put_file(installer_file.name, installer_file.name)
                     remote.run(args=['sudo', 'cp', installer_file.name,
                                      '/etc/yum.repos.d/rh_inst.repo'])
+                    remote.run(args=['sudo', 'yum', 'clean', 'metadata'])
             else:
                 if config.get('deb-repo-url'):
                     deb_repo = config.get('deb-repo-url')
