@@ -687,6 +687,9 @@ def wait_for_reboot(ctx, need_install, timeout, distro=False):
     :param timeout: number of second before we timeout.
     """
     import time
+    # delay the initial reconnect, since the kernel upgrade 
+    # may take more time on vps
+    time.sleep(60)
     starttime = time.time()
     while need_install:
         teuthology.reconnect(ctx, timeout)
