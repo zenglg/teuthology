@@ -575,6 +575,7 @@ def task(ctx, config):
     project, = config.get('project', 'ceph'),
     log.debug('project %s' % project)
     overrides = ctx.config.get('overrides')
+    repos = ""
     if overrides:
         install_overrides = overrides.get('install', {})
         teuthology.deep_merge(config, install_overrides.get(project, {}))
